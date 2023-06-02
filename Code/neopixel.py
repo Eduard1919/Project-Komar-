@@ -1,64 +1,47 @@
-from machine import Pin ,I2C
-from neopixel import NeoPixel
-from VL53L0X import *
-from tcs34725 import *
-from time import sleep_ms
+from machine import bitstream
 
-i2c_bus = I2C(0, sda=Pin(16), scl=Pin(17))
-tcs = TCS34725(i2c_bus)
-tcs.gain(4)#gain must be 1, 4, 16 or 60
-tcs.integration_time(80)
-i2c_bus1 = I2C(1, sda=Pin(21), scl=Pin(22))
-tof = VL53L0X(i2c_bus1)
-NUM_OF_LED = 3
-np = NeoPixel(Pin(13), NUM_OF_LED)
-np[0]=(0,0,0)
-bk=1
-Lt=100
-while True:
-    r,g,b=tcs.read(1)[0],tcs.read(1)[1],tcs.read(1)[2]
-    h,s,v=rgb_to_hsv(r,g,b)
-    if 0<h<60:
-        #print('Red')
-        np[0]=(Lt,0,0)
-    elif 61<h<120:
-        #print('Yellow')
-        np[0]=(Lt,Lt,0)
-    elif 121<h<180:
-        if v>100:
-            #print('White')
-            np[0]=(Lt,Lt,Lt)
-        elif 25<v<100:
-            #print('Green')
-            np[0]=(0,Lt,0)
-        elif v<25:
-            #print('Black')
-            if bk==0:
-                np[0]=(0,0,0)
-                bk=1
-            else:
-                np[0]=(Lt,0,0)
-                bk=0
-    elif 181<h<240:
-        if v>40:
-            #print('Cyan')
-            np[0]=(0,Lt,Lt)
-        else:
-            #print('Blue')
-            np[0]=(0,0,Lt) 
-    elif 241<h<360:
-        #print('Magenta')
-        np[0]=(Lt,0,Lt)      
-    #print('R:',r,'G:',g,'B:',b,'H:',int(h),'S:',int(s),'V:',int(v))
-    tof.start()
-    d=tof.read()
-    tof.stop()
-    if 150<d<250:
-        np[1]=(Lt,Lt,0)
-    elif d<150:
-        np[1]=(Lt,0,0)
-    else:
-        np[1]=(0,Lt,0)
-    np.write()
-    #sleep_ms(100)    
 
+class NeoPixel:
+    # G R B W
+    ORDER = (1, 0, 2, 3)
+
+    def __init__(self, pin, n, bpp=3, timing=1):
+        self.pin = pin
+        self.n = n
+        self.bpp = bpp
+        self.buf = bytearray(n * bpp)
+        self.pin.init(pin.OUT)
+        # Timing arg can either be 1 for 800kHz or 0 for 400kHz,
+        # or a user-specified timing ns tuple (high_0, low_0, high_1, low_1).
+        self.timing = (
+            ((400, 850, 800, 450) if timing else (800, 1700, 1600, 900))
+            if isinstance(timing, int)
+            else timing
+        )
+
+    def __len__(self):
+        return self.n
+
+    def __setitem__(self, i, v):
+        offset = i * self.bpp
+        for i in range(self.bpp):
+            self.buf[offset + self.ORDER[i]] = v[i]
+
+    def __getitem__(self, i):
+        offset = i * self.bpp
+        return tuple(self.buf[offset + self.ORDER[i]] for i in range(self.bpp))
+
+    def fill(self, v):
+        b = self.buf
+        l = len(self.buf)
+        bpp = self.bpp
+        for i in range(bpp):
+            c = v[i]
+            j = self.ORDER[i]
+            while j < l:
+                b[j] = c
+                j += bpp
+
+    def write(self):
+        # BITSTREAM_TYPE_HIGH_LOW = 0
+        bitstream(self.pin, 0, self.timing, self.buf)

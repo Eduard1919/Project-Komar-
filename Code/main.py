@@ -8,27 +8,30 @@ import uasyncio as asio
 import aioespnow
 import network
 
-i2c_bus = I2C(0, sda=Pin(16), scl=Pin(17))
+
+i2c_bus = I2C(1,sda=Pin(17), scl=Pin(16))
 tcs = TCS34725(i2c_bus)
+
 tcs.gain(4)#gain must be 1, 4, 16 or 60
 tcs.integration_time(80)
-i2c_bus1 = I2C(1, sda=Pin(21), scl=Pin(22))
+i2c_bus1 = I2C(0,sda=Pin(21), scl=Pin(22))
+
 tof = VL53L0X(i2c_bus1)
-NUM_OF_LED = 2
-np = NeoPixel(Pin(13), NUM_OF_LED)
+NUM_OF_LED = 1
+np = NeoPixel(Pin(27), NUM_OF_LED)
 color=['Red','Yellow','White','Green','Black','Cyan','Blue','Magenta']
 dir_move=['Stop','Forward','Left','Right','Reverse']
-motor_L = MX1508(2, 4)
-motor_R = MX1508(19, 18)
+motor_L = MX1508(33, 32)
+motor_R = MX1508(12, 14)
 Sp=1023
 Sp1=int(Sp*0.3)
 Lt=60
 alfa=0.8
-debug=0
+debug=1
 
 R_W_count,W_count,col_id,col_id_l,direct,di,dist,busy,busy_col,col_sel=0,0,0,0,0,0,500,0,0,5 
-R_m_pin = Pin(32, Pin.IN)
-L_m_pin = Pin(25, Pin.IN)
+R_m_pin = Pin(18, Pin.IN)
+L_m_pin = Pin(19, Pin.IN)
 
 motor_R.forward(Sp)
 motor_L.forward(Sp)
@@ -141,39 +144,40 @@ async def move(turn):
     global R_W_count,busy
     busy=1
     R_W_count=0    
-    while R_W_count<turn:   
+    while R_W_count<turn:
         await asio.sleep_ms(0)
     busy=0
 
 async def color_det():
     global col_id,col_id_l
     rgb=tcs.read(1)
+    #rgb=[20,20,20]
     r,g,b=rgb[0],rgb[1],rgb[2]
     h,s,v=rgb_to_hsv(r,g,b)
-    if 0<h<60:
+    if 352<h<365:
         col_id_l=col_id
         col_id=0
-    elif 61<h<120:
+    if 61<h<120:
         col_id_l=col_id
         col_id=1
     elif 121<h<180:
-        if v>100:
+        if v>1000:
             col_id_l=col_id
             col_id=2
-        elif 25<v<100:
+        elif 100<v<800:
             col_id_l=col_id
             col_id=3
-        elif v<25:
+        elif v<100:
             col_id_l=col_id
             col_id=4
     elif 181<h<240:
-        if v>40:
+        if v>400:
             col_id_l=col_id
             col_id=5
         else:
             col_id_l=col_id
             col_id=6
-    elif 241<h<360:
+    elif 330<h<352:
         col_id_l=col_id
         col_id=7 
     if debug:
@@ -213,17 +217,17 @@ async def LED_cont(int_ms):
             np[0]=(0,0,Lt) 
         elif col_id==7:
             np[0]=(Lt,0,Lt)
-        if di==0:
-            np[1]=(0,Lt,0)
-        elif di==1:
-            np[1]=(Lt,Lt,0)
-        elif di==2:
-            np[1]=(Lt,0,0)
         np.write()
-        
+#def send_director_cur(e):
+ #   await e.asend(color[col_id]+' '+dir_move[1+direct]+' '+str(dist))
+  #  if debug:
+   #     print(color[col_id]+' '+dir_move[1+direct]+' '+str(dist))
 async def send(e, period):
     while 1:
-        await e.asend(color[col_id]+' '+dir_move[1+direct]+' '+str(dist)) #
+        #send_director_cur(e)
+        await e.asend(color[col_id]+' '+dir_move[1+direct]+' '+str(dist))
+        if debug:
+            print(color[col_id]+' '+dir_move[1+direct]+' '+str(dist))
         await asio.sleep_ms(period)
         
 async def resive(e,int_ms):

@@ -341,6 +341,7 @@ class VL53L0X:
             (0x94, 0x6b),
             (0x83, 0x00),
         )
+        print(self._register(0x83))
         for timeout in range(_IO_TIMEOUT):
             if self._register(0x83):
                 break
